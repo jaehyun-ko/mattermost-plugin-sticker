@@ -13,6 +13,7 @@ import (
 func (p *Plugin) initAPI() {
 	p.router.HandleFunc("/api/v1/stickers", p.handleGetStickers).Methods(http.MethodGet)
 	p.router.HandleFunc("/api/v1/stickers", p.handleCreateSticker).Methods(http.MethodPost)
+	p.router.HandleFunc("/api/v1/stickers/bulk", p.handleBulkUpload).Methods(http.MethodPost)
 	p.router.HandleFunc("/api/v1/stickers/from-url", p.handleCreateStickerFromURL).Methods(http.MethodPost)
 	p.router.HandleFunc("/api/v1/stickers/{id}", p.handleDeleteSticker).Methods(http.MethodDelete)
 	p.router.HandleFunc("/api/v1/stickers/{id}/image", p.handleGetStickerImage).Methods(http.MethodGet)
@@ -293,4 +294,118 @@ func (p *Plugin) handleCreateStickerFromURL(w http.ResponseWriter, r *http.Reque
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(sticker)
+}
+
+type BulkUploadResult struct {
+	Success []string          `json:"success"`
+	Failed  map[string]string `json:"failed"`
+}
+
+func (p *Plugin) handleBulkUpload(w http.ResponseWriter, r *http.Request) {
+	userID := r.Header.Get("Mattermost-User-Id")
+	if userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// 32MB max for bulk upload
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		http.Error(w, "Failed to parse form", http.StatusBadRequest)
+		return
+	}
+
+	channelID := r.FormValue("channel_id")
+	if channelID == "" {
+		dmChannel, appErr := p.API.GetDirectChannel(userID, userID)
+		if appErr != nil {
+			http.Error(w, "Failed to get channel for upload", http.StatusInternalServerError)
+			return
+		}
+		channelID = dmChannel.Id
+	}
+
+	allowedExts := strings.Split(p.getConfiguration().AllowedFormats, ",")
+	maxSize := int64(p.getConfiguration().MaxStickerSize * 1024)
+
+	result := BulkUploadResult{
+		Success: []string{},
+		Failed:  make(map[string]string),
+	}
+
+	files := r.MultipartForm.File["images"]
+	if len(files) == 0 {
+		http.Error(w, "No files provided", http.StatusBadRequest)
+		return
+	}
+
+	for _, fileHeader := range files {
+		filename := fileHeader.Filename
+		ext := strings.ToLower(filepath.Ext(filename))
+		name := strings.TrimSuffix(filename, ext)
+
+		// Validate extension
+		isAllowed := false
+		for _, allowed := range allowedExts {
+			if "."+strings.TrimSpace(allowed) == ext {
+				isAllowed = true
+				break
+			}
+		}
+		if !isAllowed {
+			result.Failed[filename] = "File format not allowed"
+			continue
+		}
+
+		// Validate size
+		if fileHeader.Size > maxSize {
+			result.Failed[filename] = "File size exceeds limit"
+			continue
+		}
+
+		// Check duplicate name
+		if p.IsStickerNameTaken(name) {
+			result.Failed[filename] = "Sticker name already exists"
+			continue
+		}
+
+		// Read file
+		file, err := fileHeader.Open()
+		if err != nil {
+			result.Failed[filename] = "Failed to open file"
+			continue
+		}
+
+		fileData, err := io.ReadAll(file)
+		file.Close()
+		if err != nil {
+			result.Failed[filename] = "Failed to read file"
+			continue
+		}
+
+		// Upload to Mattermost
+		fileInfo, err := p.UploadStickerImage(fileData, "sticker_"+name+ext, userID, channelID)
+		if err != nil {
+			result.Failed[filename] = "Failed to upload: " + err.Error()
+			continue
+		}
+
+		// Save sticker metadata
+		sticker := NewSticker(name, fileInfo.Id, userID)
+		if err := p.SaveSticker(sticker); err != nil {
+			result.Failed[filename] = "Failed to save: " + err.Error()
+			continue
+		}
+
+		result.Success = append(result.Success, name)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if len(result.Failed) > 0 && len(result.Success) == 0 {
+		w.WriteHeader(http.StatusBadRequest)
+	} else if len(result.Failed) > 0 {
+		w.WriteHeader(http.StatusPartialContent)
+	} else {
+		w.WriteHeader(http.StatusCreated)
+	}
+	json.NewEncoder(w).Encode(result)
 }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Sticker } from '../types';
-import { getStickers, searchStickers, uploadSticker, uploadStickerFromURL, deleteSticker, getStickerImageUrl } from '../actions/api';
+import { getStickers, searchStickers, uploadSticker, uploadStickerFromURL, deleteSticker, getStickerImageUrl, bulkUploadStickers, BulkUploadResult } from '../actions/api';
 
 interface StickerPickerProps {
     channelId: string;
@@ -20,11 +20,13 @@ const StickerPicker: React.FC<StickerPickerProps> = ({
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [showUpload, setShowUpload] = useState(false);
-    const [uploadMode, setUploadMode] = useState<'file' | 'url'>('file');
+    const [uploadMode, setUploadMode] = useState<'file' | 'url' | 'bulk'>('file');
     const [uploadName, setUploadName] = useState('');
     const [uploadFile, setUploadFile] = useState<File | null>(null);
     const [uploadUrl, setUploadUrl] = useState('');
     const [uploading, setUploading] = useState(false);
+    const [bulkFiles, setBulkFiles] = useState<FileList | null>(null);
+    const [bulkResult, setBulkResult] = useState<BulkUploadResult | null>(null);
 
     const loadStickers = useCallback(async () => {
         try {
@@ -99,6 +101,36 @@ const StickerPicker: React.FC<StickerPickerProps> = ({
         }
     };
 
+    const handleBulkUpload = async () => {
+        if (!bulkFiles || bulkFiles.length === 0) {
+            setError('Please select files');
+            return;
+        }
+
+        try {
+            setUploading(true);
+            setError(null);
+            setBulkResult(null);
+
+            const result = await bulkUploadStickers(bulkFiles, channelId);
+            setBulkResult(result);
+
+            if (result.success.length > 0) {
+                loadStickers();
+            }
+
+            if (Object.keys(result.failed).length === 0) {
+                setBulkFiles(null);
+                setShowUpload(false);
+            }
+        } catch (err) {
+            console.error('[Sticker] Bulk upload error:', err);
+            setError(err instanceof Error ? err.message : 'Failed to upload stickers');
+        } finally {
+            setUploading(false);
+        }
+    };
+
     const handleDelete = async (sticker: Sticker) => {
         if (!window.confirm(`Delete sticker "${sticker.name}"?`)) {
             return;
@@ -140,20 +172,13 @@ const StickerPicker: React.FC<StickerPickerProps> = ({
 
                 {showUpload && (
                     <div style={styles.uploadContainer}>
-                        <input
-                            type="text"
-                            placeholder="Sticker name"
-                            value={uploadName}
-                            onChange={(e) => setUploadName(e.target.value)}
-                            style={styles.uploadInput}
-                        />
                         <div style={styles.tabContainer}>
                             <button
                                 style={{
                                     ...styles.tab,
                                     ...(uploadMode === 'file' ? styles.tabActive : {}),
                                 }}
-                                onClick={() => setUploadMode('file')}
+                                onClick={() => { setUploadMode('file'); setBulkResult(null); }}
                             >
                                 File
                             </button>
@@ -162,56 +187,127 @@ const StickerPicker: React.FC<StickerPickerProps> = ({
                                     ...styles.tab,
                                     ...(uploadMode === 'url' ? styles.tabActive : {}),
                                 }}
-                                onClick={() => setUploadMode('url')}
+                                onClick={() => { setUploadMode('url'); setBulkResult(null); }}
                             >
                                 URL
                             </button>
+                            <button
+                                style={{
+                                    ...styles.tab,
+                                    ...(uploadMode === 'bulk' ? styles.tabActive : {}),
+                                }}
+                                onClick={() => { setUploadMode('bulk'); setBulkResult(null); }}
+                            >
+                                Bulk
+                            </button>
                         </div>
-                        {uploadMode === 'file' ? (
-                            <div style={styles.fileInputWrapper}>
-                                <input
-                                    type="file"
-                                    id="sticker-file-input"
-                                    accept="image/png,image/gif,image/jpeg,image/webp"
-                                    onChange={(e) => {
-                                        console.log('[Sticker] File selected:', e.target.files?.[0]);
-                                        setUploadFile(e.target.files?.[0] || null);
+                        {uploadMode === 'bulk' ? (
+                            <>
+                                <div style={styles.bulkHint}>
+                                    Select multiple files. Sticker names will be set from filenames (without extension).
+                                </div>
+                                <div style={styles.fileInputWrapper}>
+                                    <input
+                                        type="file"
+                                        id="sticker-bulk-input"
+                                        accept="image/png,image/gif,image/jpeg,image/webp"
+                                        multiple
+                                        onChange={(e) => {
+                                            setBulkFiles(e.target.files);
+                                            setBulkResult(null);
+                                        }}
+                                        style={styles.fileInputHidden}
+                                    />
+                                    <label htmlFor="sticker-bulk-input" style={styles.fileInputLabel}>
+                                        {bulkFiles ? `${bulkFiles.length} file(s) selected` : 'Choose files...'}
+                                    </label>
+                                </div>
+                                {bulkResult && (
+                                    <div style={styles.bulkResult}>
+                                        {bulkResult.success.length > 0 && (
+                                            <div style={styles.bulkSuccess}>
+                                                Added: {bulkResult.success.join(', ')}
+                                            </div>
+                                        )}
+                                        {Object.keys(bulkResult.failed).length > 0 && (
+                                            <div style={styles.bulkFailed}>
+                                                Failed:
+                                                {Object.entries(bulkResult.failed).map(([file, reason]) => (
+                                                    <div key={file} style={styles.bulkFailedItem}>
+                                                        {file}: {reason}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                                <button
+                                    style={{
+                                        ...styles.uploadButton,
+                                        ...(uploading || !bulkFiles || bulkFiles.length === 0 ? styles.uploadButtonDisabled : {}),
                                     }}
-                                    style={styles.fileInputHidden}
-                                />
-                                <label htmlFor="sticker-file-input" style={styles.fileInputLabel}>
-                                    {uploadFile ? uploadFile.name : 'Choose file...'}
-                                </label>
-                            </div>
+                                    onClick={handleBulkUpload}
+                                    disabled={uploading || !bulkFiles || bulkFiles.length === 0}
+                                >
+                                    {uploading ? 'Uploading...' : !bulkFiles ? 'Select files' : `Upload ${bulkFiles.length} file(s)`}
+                                </button>
+                            </>
                         ) : (
-                            <input
-                                type="text"
-                                placeholder="https://example.com/image.png"
-                                value={uploadUrl}
-                                onChange={(e) => setUploadUrl(e.target.value)}
-                                style={styles.uploadInput}
-                            />
+                            <>
+                                <input
+                                    type="text"
+                                    placeholder="Sticker name"
+                                    value={uploadName}
+                                    onChange={(e) => setUploadName(e.target.value)}
+                                    style={styles.uploadInput}
+                                />
+                                {uploadMode === 'file' ? (
+                                    <div style={styles.fileInputWrapper}>
+                                        <input
+                                            type="file"
+                                            id="sticker-file-input"
+                                            accept="image/png,image/gif,image/jpeg,image/webp"
+                                            onChange={(e) => {
+                                                console.log('[Sticker] File selected:', e.target.files?.[0]);
+                                                setUploadFile(e.target.files?.[0] || null);
+                                            }}
+                                            style={styles.fileInputHidden}
+                                        />
+                                        <label htmlFor="sticker-file-input" style={styles.fileInputLabel}>
+                                            {uploadFile ? uploadFile.name : 'Choose file...'}
+                                        </label>
+                                    </div>
+                                ) : (
+                                    <input
+                                        type="text"
+                                        placeholder="https://example.com/image.png"
+                                        value={uploadUrl}
+                                        onChange={(e) => setUploadUrl(e.target.value)}
+                                        style={styles.uploadInput}
+                                    />
+                                )}
+                                <button
+                                    style={{
+                                        ...styles.uploadButton,
+                                        ...(uploading || !uploadName.trim() || (uploadMode === 'file' ? !uploadFile : !uploadUrl.trim())
+                                            ? styles.uploadButtonDisabled
+                                            : {}),
+                                    }}
+                                    onClick={handleUpload}
+                                    disabled={uploading || !uploadName.trim() || (uploadMode === 'file' ? !uploadFile : !uploadUrl.trim())}
+                                >
+                                    {uploading
+                                        ? 'Uploading...'
+                                        : !uploadName.trim()
+                                        ? 'Enter name'
+                                        : uploadMode === 'file' && !uploadFile
+                                        ? 'Select file'
+                                        : uploadMode === 'url' && !uploadUrl.trim()
+                                        ? 'Enter URL'
+                                        : 'Upload'}
+                                </button>
+                            </>
                         )}
-                        <button
-                            style={{
-                                ...styles.uploadButton,
-                                ...(uploading || !uploadName.trim() || (uploadMode === 'file' ? !uploadFile : !uploadUrl.trim())
-                                    ? styles.uploadButtonDisabled
-                                    : {}),
-                            }}
-                            onClick={handleUpload}
-                            disabled={uploading || !uploadName.trim() || (uploadMode === 'file' ? !uploadFile : !uploadUrl.trim())}
-                        >
-                            {uploading
-                                ? 'Uploading...'
-                                : !uploadName.trim()
-                                ? 'Enter name'
-                                : uploadMode === 'file' && !uploadFile
-                                ? 'Select file'
-                                : uploadMode === 'url' && !uploadUrl.trim()
-                                ? 'Enter URL'
-                                : 'Upload'}
-                        </button>
                     </div>
                 )}
 
@@ -473,6 +569,31 @@ const styles: { [key: string]: React.CSSProperties } = {
         textAlign: 'center',
         padding: '20px',
         color: 'var(--center-channel-color-56, #666)',
+    },
+    bulkHint: {
+        fontSize: '12px',
+        color: 'var(--center-channel-color-56, #666)',
+        marginBottom: '4px',
+    },
+    bulkResult: {
+        padding: '8px',
+        borderRadius: '4px',
+        backgroundColor: 'var(--center-channel-bg, #fff)',
+        border: '1px solid var(--center-channel-color-24, #ddd)',
+        fontSize: '12px',
+        maxHeight: '100px',
+        overflowY: 'auto',
+    },
+    bulkSuccess: {
+        color: 'var(--online-indicator, #3db887)',
+        marginBottom: '4px',
+    },
+    bulkFailed: {
+        color: 'var(--error-text-color, #d24b4e)',
+    },
+    bulkFailedItem: {
+        marginLeft: '8px',
+        fontSize: '11px',
     },
 };
 

@@ -150,6 +150,26 @@ export const deleteSticker = async (id: string): Promise<void> => {
     return doDelete(`${getPluginServerRoute()}/api/v1/stickers/${id}`);
 };
 
+export interface BulkUploadResult {
+    success: string[];
+    failed: Record<string, string>;
+}
+
+export const bulkUploadStickers = async (
+    files: FileList,
+    channelId?: string
+): Promise<BulkUploadResult> => {
+    const formData = new FormData();
+    for (let i = 0; i < files.length; i++) {
+        formData.append('images', files[i]);
+    }
+    if (channelId) {
+        formData.append('channel_id', channelId);
+    }
+
+    return doPost(`${getPluginServerRoute()}/api/v1/stickers/bulk`, formData);
+};
+
 export const uploadStickerFromURL = async (
     name: string,
     url: string,
