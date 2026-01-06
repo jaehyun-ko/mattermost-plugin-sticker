@@ -17,6 +17,7 @@ declare global {
 interface PluginState {
     pickerVisible: boolean;
     channelId: string;
+    rootId: string;
 }
 
 class Plugin {
@@ -27,6 +28,7 @@ class Plugin {
     private state: PluginState = {
         pickerVisible: false,
         channelId: '',
+        rootId: '',
     };
 
     public initialize(registry: PluginRegistry, store: Store): void {
@@ -82,9 +84,17 @@ class Plugin {
             channelId = state.entities?.channels?.currentChannelId || '';
         }
 
+        // Get root_id if we're in a thread (RHS)
+        let rootId = '';
+        const rhsState = state.views?.rhs;
+        if (rhsState?.selectedPostId) {
+            rootId = rhsState.selectedPostId;
+        }
+
         this.state = {
             pickerVisible: true,
             channelId,
+            rootId,
         };
 
         this.renderPicker(currentUserId);
@@ -100,17 +110,17 @@ class Plugin {
     private handleStickerSelect(sticker: Sticker): void {
         if (!this.store) return;
 
-        const { channelId } = this.state;
+        const { channelId, rootId } = this.state;
 
         // Send sticker via REST API
-        this.sendStickerPost(channelId, sticker);
+        this.sendStickerPost(channelId, sticker, rootId);
 
         this.closeStickerPicker();
     }
 
-    private async sendStickerPost(channelId: string, sticker: Sticker): Promise<void> {
+    private async sendStickerPost(channelId: string, sticker: Sticker, rootId?: string): Promise<void> {
         try {
-            await doPost('/api/v4/posts', {
+            const postData: any = {
                 channel_id: channelId,
                 message: '',
                 type: 'custom_sticker',
@@ -119,7 +129,14 @@ class Plugin {
                     sticker_name: sticker.name,
                     file_id: sticker.file_id,
                 },
-            });
+            };
+
+            // Add root_id for thread replies
+            if (rootId) {
+                postData.root_id = rootId;
+            }
+
+            await doPost('/api/v4/posts', postData);
         } catch (error) {
             console.error('Failed to send sticker:', error);
         }
