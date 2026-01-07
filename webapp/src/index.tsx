@@ -120,8 +120,8 @@ class Plugin {
 
     private async sendStickerPost(channelId: string, sticker: Sticker, rootId?: string): Promise<void> {
         try {
-            // Use markdown image for mobile compatibility
-            const imageUrl = `/plugins/com.example.sticker/api/v1/stickers/${sticker.id}/image`;
+            // Use Mattermost file API URL for mobile compatibility
+            const imageUrl = `/api/v4/files/${sticker.file_id}`;
             const message = `![${sticker.name}](${imageUrl})`;
 
             const postData: any = {

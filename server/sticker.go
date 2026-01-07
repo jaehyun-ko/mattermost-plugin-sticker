@@ -48,8 +48,8 @@ func (p *Plugin) CreateStickerPost(channelID, userID, stickerID, rootID string) 
 		return nil, err
 	}
 
-	// Use markdown image for mobile compatibility
-	imageURL := "/plugins/com.example.sticker/api/v1/stickers/" + sticker.ID + "/image"
+	// Use Mattermost file API URL for mobile compatibility
+	imageURL := "/api/v4/files/" + sticker.FileID
 	message := "![" + sticker.Name + "](" + imageURL + ")"
 
 	post := &model.Post{
