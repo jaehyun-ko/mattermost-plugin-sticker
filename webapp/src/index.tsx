@@ -120,15 +120,13 @@ class Plugin {
 
     private async sendStickerPost(channelId: string, sticker: Sticker, rootId?: string): Promise<void> {
         try {
+            // Use markdown image for mobile compatibility
+            const imageUrl = `/plugins/com.example.sticker/api/v1/stickers/${sticker.id}/image`;
+            const message = `![${sticker.name}](${imageUrl})`;
+
             const postData: any = {
                 channel_id: channelId,
-                message: '',
-                type: 'custom_sticker',
-                props: {
-                    sticker_id: sticker.id,
-                    sticker_name: sticker.name,
-                    file_id: sticker.file_id,
-                },
+                message: message,
             };
 
             // Add root_id for thread replies

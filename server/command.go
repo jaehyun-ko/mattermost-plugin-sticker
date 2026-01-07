@@ -36,7 +36,7 @@ func (p *Plugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*mo
 	case "help":
 		return p.showHelp(), nil
 	default:
-		return p.sendSticker(args.ChannelId, args.UserId, subcommand)
+		return p.sendSticker(args.ChannelId, args.UserId, args.RootId, subcommand)
 	}
 }
 
@@ -78,13 +78,13 @@ func (p *Plugin) listStickers() (*model.CommandResponse, error) {
 	return p.respondEphemeral(sb.String()), nil
 }
 
-func (p *Plugin) sendSticker(channelID, userID, name string) (*model.CommandResponse, error) {
+func (p *Plugin) sendSticker(channelID, userID, rootID, name string) (*model.CommandResponse, error) {
 	sticker, err := p.GetStickerByName(name)
 	if err != nil {
 		return p.respondEphemeral(fmt.Sprintf("Sticker '%s' not found. Use `/sticker list` to see available stickers.", name)), nil
 	}
 
-	_, err = p.CreateStickerPost(channelID, userID, sticker.ID)
+	_, err = p.CreateStickerPost(channelID, userID, sticker.ID, rootID)
 	if err != nil {
 		return p.respondEphemeral("Failed to send sticker: " + err.Error()), nil
 	}

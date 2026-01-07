@@ -42,21 +42,21 @@ func StickerFromJSON(data []byte) (*Sticker, error) {
 	return &s, nil
 }
 
-func (p *Plugin) CreateStickerPost(channelID, userID, stickerID string) (*model.Post, error) {
+func (p *Plugin) CreateStickerPost(channelID, userID, stickerID, rootID string) (*model.Post, error) {
 	sticker, err := p.GetSticker(stickerID)
 	if err != nil {
 		return nil, err
 	}
 
+	// Use markdown image for mobile compatibility
+	imageURL := "/plugins/com.example.sticker/api/v1/stickers/" + sticker.ID + "/image"
+	message := "![" + sticker.Name + "](" + imageURL + ")"
+
 	post := &model.Post{
 		UserId:    userID,
 		ChannelId: channelID,
-		Type:      "custom_sticker",
-		Props: map[string]interface{}{
-			"sticker_id":   sticker.ID,
-			"sticker_name": sticker.Name,
-			"file_id":      sticker.FileID,
-		},
+		RootId:    rootID,
+		Message:   message,
 	}
 
 	return p.API.CreatePost(post)
