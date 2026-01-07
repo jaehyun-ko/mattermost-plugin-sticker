@@ -120,13 +120,11 @@ class Plugin {
 
     private async sendStickerPost(channelId: string, sticker: Sticker, rootId?: string): Promise<void> {
         try {
-            // Use Mattermost file API URL for mobile compatibility
-            const imageUrl = `/api/v4/files/${sticker.file_id}`;
-            const message = `![${sticker.name}](${imageUrl})`;
-
+            // Use file_ids for mobile compatibility
             const postData: any = {
                 channel_id: channelId,
-                message: message,
+                message: '',
+                file_ids: [sticker.file_id],
             };
 
             // Add root_id for thread replies

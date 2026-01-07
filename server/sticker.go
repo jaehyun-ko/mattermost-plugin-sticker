@@ -48,15 +48,12 @@ func (p *Plugin) CreateStickerPost(channelID, userID, stickerID, rootID string) 
 		return nil, err
 	}
 
-	// Use Mattermost file API URL for mobile compatibility
-	imageURL := "/api/v4/files/" + sticker.FileID
-	message := "![" + sticker.Name + "](" + imageURL + ")"
-
+	// Use file_ids for mobile compatibility
 	post := &model.Post{
 		UserId:    userID,
 		ChannelId: channelID,
 		RootId:    rootID,
-		Message:   message,
+		FileIds:   []string{sticker.FileID},
 	}
 
 	return p.API.CreatePost(post)
