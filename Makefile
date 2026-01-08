@@ -1,7 +1,7 @@
 .PHONY: all clean build dist server webapp check-style
 
 PLUGIN_ID ?= com.example.sticker
-PLUGIN_VERSION ?= 0.1.0
+PLUGIN_VERSION ?= 0.1.1
 
 GOOS ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)
