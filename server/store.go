@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/mattermost/mattermost/server/public/model"
@@ -215,4 +217,51 @@ func (p *Plugin) UploadStickerImage(fileData []byte, filename, userID, channelID
 	}
 
 	return fileInfo, nil
+}
+
+// SaveStickerImageToLocal saves sticker image to local filesystem and returns the filename
+func (p *Plugin) SaveStickerImageToLocal(fileData []byte, originalFilename string) (string, error) {
+	cfg := p.getConfiguration()
+	if cfg.StickerStoragePath == "" {
+		return "", fmt.Errorf("sticker storage path not configured")
+	}
+
+	// Generate unique filename
+	ext := filepath.Ext(originalFilename)
+	filename := model.NewId() + ext
+
+	fullPath := filepath.Join(cfg.StickerStoragePath, filename)
+
+	// Ensure directory exists
+	if err := os.MkdirAll(cfg.StickerStoragePath, 0755); err != nil {
+		return "", fmt.Errorf("failed to create storage directory: %w", err)
+	}
+
+	// Write file
+	if err := os.WriteFile(fullPath, fileData, 0644); err != nil {
+		return "", fmt.Errorf("failed to write sticker file: %w", err)
+	}
+
+	return filename, nil
+}
+
+// DeleteStickerImageFromLocal deletes sticker image from local filesystem
+func (p *Plugin) DeleteStickerImageFromLocal(filename string) error {
+	cfg := p.getConfiguration()
+	if cfg.StickerStoragePath == "" || filename == "" {
+		return nil
+	}
+
+	fullPath := filepath.Join(cfg.StickerStoragePath, filename)
+	return os.Remove(fullPath)
+}
+
+// GetStickerPublicURL returns the public URL for a sticker
+func (p *Plugin) GetStickerPublicURL(filename string) string {
+	cfg := p.getConfiguration()
+	if cfg.StickerServerURL == "" || filename == "" {
+		return ""
+	}
+
+	return strings.TrimSuffix(cfg.StickerServerURL, "/") + "/" + filename
 }

@@ -95,28 +95,14 @@ func (p *Plugin) handleCreateSticker(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	channelID := r.FormValue("channel_id")
-	if channelID == "" {
-		teams, appErr := p.API.GetTeamsForUser(userID)
-		if appErr != nil || len(teams) == 0 {
-			http.Error(w, "Failed to find team", http.StatusInternalServerError)
-			return
-		}
-		dmChannel, appErr := p.API.GetDirectChannel(userID, userID)
-		if appErr != nil {
-			http.Error(w, "Failed to get channel for upload", http.StatusInternalServerError)
-			return
-		}
-		channelID = dmChannel.Id
-	}
-
-	fileInfo, err := p.UploadStickerImage(fileData, "sticker_"+name+ext, userID, channelID)
+	// Save to local filesystem
+	filename, err := p.SaveStickerImageToLocal(fileData, header.Filename)
 	if err != nil {
-		http.Error(w, "Failed to upload image: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Failed to save sticker image: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	sticker := NewSticker(name, fileInfo.Id, userID)
+	sticker := NewSticker(name, "", filename, userID)
 	if err := p.SaveSticker(sticker); err != nil {
 		http.Error(w, "Failed to save sticker: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -146,6 +132,18 @@ func (p *Plugin) handleDeleteSticker(w http.ResponseWriter, r *http.Request) {
 	if !canDelete {
 		http.Error(w, "Permission denied: you can only delete your own stickers", http.StatusForbidden)
 		return
+	}
+
+	// Get sticker to delete local file
+	sticker, err := p.GetSticker(stickerID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	// Delete local file
+	if sticker.Filename != "" {
+		p.DeleteStickerImageFromLocal(sticker.Filename)
 	}
 
 	if err := p.DeleteSticker(stickerID); err != nil {
@@ -271,23 +269,14 @@ func (p *Plugin) handleCreateStickerFromURL(w http.ResponseWriter, r *http.Reque
 		ext = ".webp"
 	}
 
-	channelID := req.ChannelID
-	if channelID == "" {
-		dmChannel, appErr := p.API.GetDirectChannel(userID, userID)
-		if appErr != nil {
-			http.Error(w, "Failed to get channel for upload", http.StatusInternalServerError)
-			return
-		}
-		channelID = dmChannel.Id
-	}
-
-	fileInfo, err := p.UploadStickerImage(fileData, "sticker_"+req.Name+ext, userID, channelID)
+	// Save to local filesystem
+	filename, err := p.SaveStickerImageToLocal(fileData, "sticker_"+req.Name+ext)
 	if err != nil {
-		http.Error(w, "Failed to upload image: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Failed to save sticker image: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	sticker := NewSticker(req.Name, fileInfo.Id, userID)
+	sticker := NewSticker(req.Name, "", filename, userID)
 	if err := p.SaveSticker(sticker); err != nil {
 		http.Error(w, "Failed to save sticker: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -314,16 +303,6 @@ func (p *Plugin) handleBulkUpload(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		http.Error(w, "Failed to parse form", http.StatusBadRequest)
 		return
-	}
-
-	channelID := r.FormValue("channel_id")
-	if channelID == "" {
-		dmChannel, appErr := p.API.GetDirectChannel(userID, userID)
-		if appErr != nil {
-			http.Error(w, "Failed to get channel for upload", http.StatusInternalServerError)
-			return
-		}
-		channelID = dmChannel.Id
 	}
 
 	allowedExts := strings.Split(p.getConfiguration().AllowedFormats, ",")
@@ -384,15 +363,15 @@ func (p *Plugin) handleBulkUpload(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		// Upload to Mattermost
-		fileInfo, err := p.UploadStickerImage(fileData, "sticker_"+name+ext, userID, channelID)
+		// Save to local filesystem
+		savedFilename, err := p.SaveStickerImageToLocal(fileData, "sticker_"+name+ext)
 		if err != nil {
-			result.Failed[filename] = "Failed to upload: " + err.Error()
+			result.Failed[filename] = "Failed to save: " + err.Error()
 			continue
 		}
 
 		// Save sticker metadata
-		sticker := NewSticker(name, fileInfo.Id, userID)
+		sticker := NewSticker(name, "", savedFilename, userID)
 		if err := p.SaveSticker(sticker); err != nil {
 			result.Failed[filename] = "Failed to save: " + err.Error()
 			continue
@@ -447,16 +426,18 @@ func (p *Plugin) handleSendSticker(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create post: custom type for web, FileIds for mobile fallback
+	// Get public URL for sticker image
+	imageURL := p.GetStickerPublicURL(sticker.Filename)
+	if imageURL == "" {
+		http.Error(w, "Sticker server not configured", http.StatusInternalServerError)
+		return
+	}
+
+	// Create post with markdown image (works on all platforms)
 	post := &model.Post{
 		UserId:    userID,
 		ChannelId: req.ChannelID,
-		Type:      "custom_sticker",
-		FileIds:   []string{sticker.FileID},
-		Props: map[string]interface{}{
-			"sticker_id":   sticker.ID,
-			"sticker_name": sticker.Name,
-		},
+		Message:   "![" + sticker.Name + "](" + imageURL + ")",
 	}
 
 	if req.RootID != "" {

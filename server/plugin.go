@@ -19,8 +19,10 @@ type Plugin struct {
 }
 
 type configuration struct {
-	MaxStickerSize int
-	AllowedFormats string
+	StickerServerURL   string
+	StickerStoragePath string
+	MaxStickerSize     int
+	AllowedFormats     string
 }
 
 func (p *Plugin) OnActivate() error {

@@ -23,6 +23,20 @@
         "footer": "",
         "settings": [
             {
+                "key": "StickerServerURL",
+                "display_name": "Sticker Server URL",
+                "type": "text",
+                "default": "",
+                "help_text": "Public URL for sticker server (e.g., https://stickers.example.com)"
+            },
+            {
+                "key": "StickerStoragePath",
+                "display_name": "Sticker Storage Path",
+                "type": "text",
+                "default": "",
+                "help_text": "Local filesystem path to store sticker images (e.g., /data/stickers)"
+            },
+            {
                 "key": "MaxStickerSize",
                 "display_name": "Maximum Sticker Size (KB)",
                 "type": "number",
