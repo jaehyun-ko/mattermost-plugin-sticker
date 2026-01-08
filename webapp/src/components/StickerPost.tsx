@@ -3,11 +3,11 @@ import { StickerPostProps } from '../types';
 import { getFileUrl } from '../actions/api';
 
 const StickerPost: React.FC<StickerPostProps> = ({ post }) => {
-    const fileId = post.file_ids?.[0];
+    const fileId = post.props?.file_id;
     const stickerName = post.props?.sticker_name;
 
     if (!fileId) {
-        return <div>Invalid sticker</div>;
+        return null;
     }
 
     const imageUrl = getFileUrl(fileId);

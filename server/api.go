@@ -447,12 +447,19 @@ func (p *Plugin) handleSendSticker(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create post with custom type for web and FileIds for mobile fallback
+	// Create post with custom type for web and markdown image for mobile fallback
+	siteURL := *p.API.GetConfig().ServiceSettings.SiteURL
+	imageURL := siteURL + "/api/v4/files/" + sticker.FileID
+
 	post := &model.Post{
 		UserId:    userID,
 		ChannelId: req.ChannelID,
 		Type:      "custom_sticker",
-		FileIds:   []string{sticker.FileID},
+		Message:   "![" + sticker.Name + "](" + imageURL + ")",
+		Props: map[string]interface{}{
+			"file_id":      sticker.FileID,
+			"sticker_name": sticker.Name,
+		},
 	}
 
 	if req.RootID != "" {
