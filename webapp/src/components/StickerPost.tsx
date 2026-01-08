@@ -1,19 +1,33 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { StickerPostProps } from '../types';
-import { getFileUrl } from '../actions/api';
+import { getStickerImageUrl } from '../actions/api';
 
 const StickerPost: React.FC<StickerPostProps> = ({ post }) => {
-    const fileId = post.props?.file_id;
+    const containerRef = useRef<HTMLDivElement>(null);
+    const stickerId = post.props?.sticker_id;
     const stickerName = post.props?.sticker_name;
 
-    if (!fileId) {
+    // Hide default file attachment UI
+    useEffect(() => {
+        if (containerRef.current) {
+            const postContainer = containerRef.current.closest('.post__content');
+            if (postContainer) {
+                const filePreview = postContainer.querySelector('.file-preview__button, .post-image__columns, .post-image');
+                if (filePreview) {
+                    (filePreview as HTMLElement).style.display = 'none';
+                }
+            }
+        }
+    }, []);
+
+    if (!stickerId) {
         return null;
     }
 
-    const imageUrl = getFileUrl(fileId);
+    const imageUrl = getStickerImageUrl(stickerId);
 
     return (
-        <div className="sticker-post" style={styles.container}>
+        <div ref={containerRef} className="sticker-post" style={styles.container}>
             <img
                 src={imageUrl}
                 alt={stickerName || 'Sticker'}

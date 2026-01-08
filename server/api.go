@@ -447,13 +447,16 @@ func (p *Plugin) handleSendSticker(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create post with markdown image using plugin API (no auth required, cached)
-	imageURL := "/plugins/com.example.sticker/api/v1/stickers/" + sticker.ID + "/image"
-
+	// Create post: custom type for web, FileIds for mobile fallback
 	post := &model.Post{
 		UserId:    userID,
 		ChannelId: req.ChannelID,
-		Message:   "![" + sticker.Name + "](" + imageURL + ")",
+		Type:      "custom_sticker",
+		FileIds:   []string{sticker.FileID},
+		Props: map[string]interface{}{
+			"sticker_id":   sticker.ID,
+			"sticker_name": sticker.Name,
+		},
 	}
 
 	if req.RootID != "" {
