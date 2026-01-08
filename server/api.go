@@ -447,10 +447,11 @@ func (p *Plugin) handleSendSticker(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create post with FileIds for native image rendering (works on web and mobile)
+	// Create post with custom type for web and FileIds for mobile fallback
 	post := &model.Post{
 		UserId:    userID,
 		ChannelId: req.ChannelID,
+		Type:      "custom_sticker",
 		FileIds:   []string{sticker.FileID},
 	}
 
