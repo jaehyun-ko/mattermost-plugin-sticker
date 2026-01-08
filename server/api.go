@@ -447,15 +447,11 @@ func (p *Plugin) handleSendSticker(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get site URL for image link
-	siteURL := *p.API.GetConfig().ServiceSettings.SiteURL
-	imageURL := siteURL + "/plugins/com.example.sticker/api/v1/stickers/" + sticker.ID + "/image"
-
-	// Create post with markdown image (works on web and mobile)
+	// Create post with FileIds for native image rendering (works on web and mobile)
 	post := &model.Post{
 		UserId:    userID,
 		ChannelId: req.ChannelID,
-		Message:   "![" + sticker.Name + "](" + imageURL + ")",
+		FileIds:   []string{sticker.FileID},
 	}
 
 	if req.RootID != "" {
