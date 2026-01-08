@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/gorilla/mux"
+	"github.com/mattermost/mattermost/server/public/model"
 )
 
 func (p *Plugin) initAPI() {
@@ -15,6 +16,7 @@ func (p *Plugin) initAPI() {
 	p.router.HandleFunc("/api/v1/stickers", p.handleCreateSticker).Methods(http.MethodPost)
 	p.router.HandleFunc("/api/v1/stickers/bulk", p.handleBulkUpload).Methods(http.MethodPost)
 	p.router.HandleFunc("/api/v1/stickers/from-url", p.handleCreateStickerFromURL).Methods(http.MethodPost)
+	p.router.HandleFunc("/api/v1/stickers/send", p.handleSendSticker).Methods(http.MethodPost)
 	p.router.HandleFunc("/api/v1/stickers/{id}", p.handleDeleteSticker).Methods(http.MethodDelete)
 	p.router.HandleFunc("/api/v1/stickers/{id}/image", p.handleGetStickerImage).Methods(http.MethodGet)
 	p.router.HandleFunc("/api/v1/stickers/search", p.handleSearchStickers).Methods(http.MethodGet)
@@ -408,4 +410,65 @@ func (p *Plugin) handleBulkUpload(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
 	}
 	json.NewEncoder(w).Encode(result)
+}
+
+func (p *Plugin) handleSendSticker(w http.ResponseWriter, r *http.Request) {
+	userID := r.Header.Get("Mattermost-User-Id")
+	if userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		ChannelID string `json:"channel_id"`
+		StickerID string `json:"sticker_id"`
+		RootID    string `json:"root_id,omitempty"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.ChannelID == "" || req.StickerID == "" {
+		http.Error(w, "channel_id and sticker_id are required", http.StatusBadRequest)
+		return
+	}
+
+	sticker, err := p.GetSticker(req.StickerID)
+	if err != nil {
+		http.Error(w, "Sticker not found", http.StatusNotFound)
+		return
+	}
+
+	// Verify user has access to the channel
+	if _, appErr := p.API.GetChannelMember(req.ChannelID, userID); appErr != nil {
+		http.Error(w, "You don't have access to this channel", http.StatusForbidden)
+		return
+	}
+
+	// Get site URL for image link
+	siteURL := *p.API.GetConfig().ServiceSettings.SiteURL
+	imageURL := siteURL + "/plugins/com.example.sticker/api/v1/stickers/" + sticker.ID + "/image"
+
+	// Create post with markdown image (works on web and mobile)
+	post := &model.Post{
+		UserId:    userID,
+		ChannelId: req.ChannelID,
+		Message:   "![" + sticker.Name + "](" + imageURL + ")",
+	}
+
+	if req.RootID != "" {
+		post.RootId = req.RootID
+	}
+
+	createdPost, appErr := p.API.CreatePost(post)
+	if appErr != nil {
+		http.Error(w, "Failed to create post: "+appErr.Message, http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(createdPost)
 }

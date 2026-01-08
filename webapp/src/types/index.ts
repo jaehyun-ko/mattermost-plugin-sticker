@@ -31,10 +31,11 @@ export interface Store {
 export interface StickerPostProps {
     post: {
         id: string;
-        props: {
-            sticker_id: string;
-            sticker_name: string;
-            file_id: string;
+        file_ids?: string[];
+        props?: {
+            sticker_id?: string;
+            sticker_name?: string;
+            file_id?: string;
         };
     };
 }

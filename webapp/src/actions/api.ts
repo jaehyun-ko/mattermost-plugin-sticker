@@ -189,3 +189,15 @@ export const getStickerImageUrl = (stickerId: string): string => {
 export const getFileUrl = (fileId: string): string => {
     return `/api/v4/files/${fileId}`;
 };
+
+export const sendSticker = async (
+    channelId: string,
+    stickerId: string,
+    rootId?: string
+): Promise<any> => {
+    return doPost(`${getPluginServerRoute()}/api/v1/stickers/send`, {
+        channel_id: channelId,
+        sticker_id: stickerId,
+        root_id: rootId,
+    });
+};

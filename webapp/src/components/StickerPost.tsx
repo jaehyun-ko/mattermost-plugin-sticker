@@ -1,21 +1,22 @@
 import React from 'react';
 import { StickerPostProps } from '../types';
-import { getStickerImageUrl } from '../actions/api';
+import { getFileUrl } from '../actions/api';
 
 const StickerPost: React.FC<StickerPostProps> = ({ post }) => {
-    const { sticker_id, sticker_name } = post.props;
+    const fileId = post.file_ids?.[0];
+    const stickerName = post.props?.sticker_name;
 
-    if (!sticker_id) {
+    if (!fileId) {
         return <div>Invalid sticker</div>;
     }
 
-    const imageUrl = getStickerImageUrl(sticker_id);
+    const imageUrl = getFileUrl(fileId);
 
     return (
         <div className="sticker-post" style={styles.container}>
             <img
                 src={imageUrl}
-                alt={sticker_name || 'Sticker'}
+                alt={stickerName || 'Sticker'}
                 style={styles.image}
                 loading="lazy"
             />

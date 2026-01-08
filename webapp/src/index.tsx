@@ -4,7 +4,7 @@ import { PluginRegistry, Store, Sticker } from './types';
 import StickerPicker from './components/StickerPicker';
 import StickerPost from './components/StickerPost';
 import { StickerIcon } from './components/StickerButton';
-import { doPost } from './actions/api';
+import { sendSticker } from './actions/api';
 
 const PLUGIN_ID = 'com.example.sticker';
 
@@ -120,19 +120,7 @@ class Plugin {
 
     private async sendStickerPost(channelId: string, sticker: Sticker, rootId?: string): Promise<void> {
         try {
-            // Use file_ids for mobile compatibility
-            const postData: any = {
-                channel_id: channelId,
-                message: '',
-                file_ids: [sticker.file_id],
-            };
-
-            // Add root_id for thread replies
-            if (rootId) {
-                postData.root_id = rootId;
-            }
-
-            await doPost('/api/v4/posts', postData);
+            await sendSticker(channelId, sticker.id, rootId);
         } catch (error) {
             console.error('Failed to send sticker:', error);
         }
