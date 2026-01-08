@@ -447,11 +447,13 @@ func (p *Plugin) handleSendSticker(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create post with FileIds - works on both web and mobile
+	// Create post with markdown image using plugin API (no auth required, cached)
+	imageURL := "/plugins/com.example.sticker/api/v1/stickers/" + sticker.ID + "/image"
+
 	post := &model.Post{
 		UserId:    userID,
 		ChannelId: req.ChannelID,
-		FileIds:   []string{sticker.FileID},
+		Message:   "![" + sticker.Name + "](" + imageURL + ")",
 	}
 
 	if req.RootID != "" {
